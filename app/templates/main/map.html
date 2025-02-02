@@ -31,10 +31,45 @@
             margin-bottom: 5px;
             font-size: 16px;
         }
+        #side-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 300px;
+            background: white;
+            padding: 10px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            max-height: 90%;
+            overflow-y: scroll;
+            transition: transform 0.3s ease;
+        }
+        .panel-collapsed {
+            transform: translateX(100%);
+        }
+        .panel-expanded {
+            transform: translateX(0);
+        }
+        .parking-item {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+        }
+        .radius-input {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <div id="side-panel" class="panel-expanded">
+        <h3>Available Parking</h3>
+        <button id="toggle-panel-btn">☰</button>
+        <div class="radius-input">
+            <label for="radius">Radius (m): </label>
+            <input type="number" id="radius" value="500" min="0">
+        </div>
+        <div id="parking-list"></div>
+    </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -55,15 +90,7 @@
         var osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         });
-
         osmStandard.addTo(map);
-
-        // Control Layers (optional)
-        var baseLayers = {
-            "Basic OSM": osmStandard
-        };
-
-        L.control.layers(baseLayers).addTo(map);
 
         // Add GPS location button
         L.control.locate({
@@ -75,19 +102,18 @@
                 maxZoom: 16,
                 watch: true
             },
-            drawCircle: false,  // 🔹 Disables the blue circle
-            circleStyle: {      // 🔹 If you want to keep the circle but make it smaller
+            drawCircle: false, 
+            circleStyle: {      
                 weight: 1,
                 opacity: 0.5,
                 fillOpacity: 0.2
             },
-            
         }).addTo(map);
 
         // Add search functionality
         var geocoder = new L.Control.Geocoder({
             geocoder: new L.Control.Geocoder.Photon({
-                limit: 5, // Show up to 5 results
+                limit: 5, 
             })
         }).on('markgeocode', function (e) {
             map.setView(e.geocode.center, 16);
@@ -100,7 +126,7 @@
             routeWhileDragging: true,
             createMarker: function() { return null; },
             lineOptions: {
-                styles: [{ color: "#007bff", weight: 5, opacity: 0.7 }] // Change route color (Blue)
+                styles: [{ color: "#007bff", weight: 5, opacity: 0.7 }]
             }
         }).addTo(map);
 
@@ -117,8 +143,8 @@
                 L.DomEvent.stopPropagation(event);
                 currentSelection = 'start';
                 console.log(currentSelection)
-                selectStartBtn._button.style.backgroundColor = '#4CAF50';  // Active button color
-                selectDestinationBtn._button.style.backgroundColor = '#008CBA'; // Reset destination button
+                selectStartBtn._button.style.backgroundColor = '#4CAF50';  
+                selectDestinationBtn._button.style.backgroundColor = '#008CBA'; 
             });
             return btn;
         };
@@ -126,14 +152,14 @@
 
         // Custom marker icons
         var startIcon = L.icon({
-            iconUrl: "https://img.icons8.com/?size=100&id=7880&format=png&color=40C057", // Green Pin
-            iconSize: [32, 32], // Adjust size as needed
-            iconAnchor: [16, 32], // Positioning
+            iconUrl: "https://img.icons8.com/?size=100&id=7880&format=png&color=40C057", 
+            iconSize: [32, 32],
+            iconAnchor: [16, 32], 
             popupAnchor: [0, -40] 
         });
 
         var destIcon = L.icon({
-            iconUrl: "https://img.icons8.com/?size=100&id=7880&format=png&color=F44336", // Red Pin
+            iconUrl: "https://img.icons8.com/?size=100&id=7880&format=png&color=F44336", 
             iconSize: [32, 32],
             iconAnchor: [16, 32],
             popupAnchor: [0, -40]
@@ -146,8 +172,8 @@
             L.DomEvent.on(btn, 'click', function (event) {
                 L.DomEvent.stopPropagation(event);
                 currentSelection = 'destination';
-                selectDestinationBtn._button.style.backgroundColor = '#f44336';  // Active button color
-                selectStartBtn._button.style.backgroundColor = '#008CBA'; // Reset start button
+                selectDestinationBtn._button.style.backgroundColor = '#f44336'; 
+                selectStartBtn._button.style.backgroundColor = '#008CBA'; 
             });
             return btn;
         };
@@ -176,43 +202,38 @@
 
         // Tracking Button Control
         var trackBtn = L.control({ position: 'topleft' });
-        var trackingID = null
+        var trackingID = null;
 
         trackBtn.onAdd = function () {
             var btn = L.DomUtil.create('button', 'leaflet-control-button');
-            btn.innerHTML = '📍'; // Emoji for GPS tracking
+            btn.innerHTML = '📍'; 
             btn.title = "Track My Location";
             
             L.DomEvent.on(btn, 'click', function (event) {
-                L.DomEvent.stopPropagation(event); // Prevent map click
+                L.DomEvent.stopPropagation(event); 
                 
                 if (navigator.geolocation) {
-                    // If tracking is already active, stop it first
                     if (trackingID !== null) {
                         navigator.geolocation.clearWatch(trackingID);
                         trackingID = null;
-                        btn.style.backgroundColor = '#333'; // Reset button color
+                        btn.style.backgroundColor = '#333'; 
                         return;
                     }
 
-                    // Start tracking user's location
                     trackingID = navigator.geolocation.watchPosition(function (position) {
                         var userLatLng = L.latLng(position.coords.latitude, position.coords.longitude);
 
-                        // Move the Start Marker
                         if (startMarker) {
                             startMarker.setLatLng(userLatLng);
                         } else {
                             startMarker = L.marker(userLatLng, {
-                                icon: startIcon // Your custom green icon
+                                icon: startIcon 
                             }).addTo(map);
                         }
 
-                        // Update Routing
                         control.setWaypoints([userLatLng, control.getWaypoints()[1]]);
-                        
-                        map.setView(userLatLng, 16); // Optional: Center map on user
-                        btn.style.backgroundColor = '#4CAF50'; // Indicate tracking is active
+                        map.setView(userLatLng, 16); 
+                        btn.style.backgroundColor = '#4CAF50'; 
                     }, function (error) {
                         alert("Error getting location: " + error.message);
                     }, { enableHighAccuracy: true });
@@ -226,9 +247,88 @@
 
         trackBtn.addTo(map);
 
-        // Debugging location found event (Logs coordinates)
-        map.on('locationfound', function(e) {
-            console.log("User's Location:", e.latlng);
+        // Function to update the parking list with distance filter
+        function updateParkingList(userLatLng, radius) {
+            var parkingUrl = `http://overpass-api.de/api/interpreter?data=[out:json];node[amenity=parking](51.3,-0.5,51.7,-0.1);out;`; 
+            
+            fetch(parkingUrl)
+                .then(response => response.json())
+                .then(data => {
+                    var parkingList = document.getElementById('parking-list');
+                    parkingList.innerHTML = ""; // Clear previous list
+                    var nearbyParkings = [];
+
+                    data.elements.forEach(parking => {
+                        var latLng = L.latLng(parking.lat, parking.lon);
+                        var distance = userLatLng.distanceTo(latLng);
+
+                        if (distance <= radius) {
+                            nearbyParkings.push({
+                                latLng: latLng,
+                                distance: distance,
+                                id: parking.id
+                            });
+                        }
+                    });
+
+                    nearbyParkings.sort((a, b) => a.distance - b.distance);
+
+                    nearbyParkings.forEach(parking => {
+                        var marker = L.marker(parking.latLng).addTo(map);
+
+                        var parkingInfo = `<div class="parking-item">
+                            <strong>Parking Spot</strong><br>
+                            Lat: ${parking.latLng.lat}, Lon: ${parking.latLng.lng}<br>
+                            Distance: ${parking.distance.toFixed(0)} meters<br>
+                            <button onclick="setDestination(${parking.latLng.lat}, ${parking.latLng.lng})">Set as Destination</button>
+                        </div>`;
+                        parkingList.innerHTML += parkingInfo;
+
+                        marker.on('click', function () {
+                            setDestination(parking.latLng.lat, parking.latLng.lng);
+                        });
+                    });
+                })
+                .catch(err => console.error("Error fetching parking data:", err));
+        }
+
+        // Function to set destination on map
+        function setDestination(lat, lon) {
+            var destinationLatLng = L.latLng(lat, lon);
+            if (destinationMarker) {
+                destinationMarker.setLatLng(destinationLatLng);
+            } else {
+                destinationMarker = L.marker(destinationLatLng, { icon: destIcon }).addTo(map);
+            }
+
+            control.setWaypoints([startMarker.getLatLng(), destinationLatLng]);
+            map.setView(destinationLatLng, 16); 
+        }
+
+        // Toggle side panel visibility
+        var togglePanelBtn = document.getElementById('toggle-panel-btn');
+        togglePanelBtn.addEventListener('click', function () {
+            var sidePanel = document.getElementById('side-panel');
+            sidePanel.classList.toggle('panel-collapsed');
+            sidePanel.classList.toggle('panel-expanded');
+        });
+
+        // Watch for changes in radius input
+        document.getElementById('radius').addEventListener('input', function (e) {
+            if (startMarker) {
+                var userLatLng = startMarker.getLatLng();
+                var radius = parseFloat(e.target.value);
+                updateParkingList(userLatLng, radius);
+            }
+        });
+
+        // Refresh parking list whenever the start position changes
+        map.on('click', function (e) {
+            if (startMarker) {
+                var userLatLng = startMarker.getLatLng();
+                var radius = parseFloat(document.getElementById('radius').value);
+                updateParkingList(userLatLng, radius);
+            }
         });
     </script>
 </body>
