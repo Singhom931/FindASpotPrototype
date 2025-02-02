@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Map with Features</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <!-- Leaflet Control Geocoder CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <!-- Leaflet Locate Control CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.locatecontrol/dist/L.Control.Locate.min.css" />
+    
+    <style>
+        #map { height: 600px; }
+        .btn-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+        }
+        .btn {
+            background-color: #008CBA;
+            color: white;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <!-- Leaflet Control Geocoder JS -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <!-- Leaflet Locate Control JS -->
+    <script src="https://unpkg.com/leaflet.locatecontrol/dist/L.Control.Locate.min.js"></script>
+
+    <script>
+        var map = L.map('map', {
+            center: [51.505, -0.09],
+            zoom: 13
+        });
+
+        // Base Layer
+        var osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        });
+
+        osmStandard.addTo(map);
+
+        // Control Layers (optional)
+        var baseLayers = {
+            "Basic OSM": osmStandard
+        };
+
+        L.control.layers(baseLayers).addTo(map);
+
+        // Add GPS location button
+        L.control.locate({
+            follow: true,
+            setView: true,
+            keepCurrentZoomLevel: true,
+            locateOptions: {
+                enableHighAccuracy: true,
+                maxZoom: 16,
+                watch: true
+            },
+            drawCircle: false,  // 🔹 Disables the blue circle
+            circleStyle: {      // 🔹 If you want to keep the circle but make it smaller
+                weight: 1,
+                opacity: 0.5,
+                fillOpacity: 0.2
+            },
+            
+        }).addTo(map);
+
+        // Add search functionality
+        var geocoder = new L.Control.Geocoder({
+            geocoder: new L.Control.Geocoder.Photon({
+                limit: 5, // Show up to 5 results
+            })
+        }).on('markgeocode', function (e) {
+            map.setView(e.geocode.center, 16);
+            L.marker(e.geocode.center).addTo(map);
+        }).addTo(map);
+
+        // Routing functionality
+        var control = L.Routing.control({
+            waypoints: [],
+            routeWhileDragging: true,
+            createMarker: function() { return null; },
+            lineOptions: {
+                styles: [{ color: "#007bff", weight: 5, opacity: 0.7 }] // Change route color (Blue)
+            }
+        }).addTo(map);
+
+        // Marker Variables
+        var startMarker, destinationMarker;
+        var currentSelection = null;
+
+        // Custom Controls for Start and Destination
+        var selectStartBtn = L.control({ position: 'topleft' });
+        selectStartBtn.onAdd = function () {
+            var btn = L.DomUtil.create('button', 'leaflet-control-button');
+            btn.innerHTML = '🟢';
+            L.DomEvent.on(btn, 'click', function (event) {
+                L.DomEvent.stopPropagation(event);
+                currentSelection = 'start';
+                console.log(currentSelection)
+                selectStartBtn._button.style.backgroundColor = '#4CAF50';  // Active button color
+                selectDestinationBtn._button.style.backgroundColor = '#008CBA'; // Reset destination button
+            });
+            return btn;
+        };
+        selectStartBtn.addTo(map);
+
+        // Custom marker icons
+        var startIcon = L.icon({
+            iconUrl: "https://img.icons8.com/?size=100&id=7880&format=png&color=40C057", // Green Pin
+            iconSize: [32, 32], // Adjust size as needed
+            iconAnchor: [16, 32], // Positioning
+            popupAnchor: [0, -40] 
+        });
+
+        var destIcon = L.icon({
+            iconUrl: "https://img.icons8.com/?size=100&id=7880&format=png&color=F44336", // Red Pin
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -40]
+        });
+
+        var selectDestinationBtn = L.control({ position: 'topleft' });
+        selectDestinationBtn.onAdd = function () {
+            var btn = L.DomUtil.create('button', 'leaflet-control-button');
+            btn.innerHTML = '🔴';
+            L.DomEvent.on(btn, 'click', function (event) {
+                L.DomEvent.stopPropagation(event);
+                currentSelection = 'destination';
+                selectDestinationBtn._button.style.backgroundColor = '#f44336';  // Active button color
+                selectStartBtn._button.style.backgroundColor = '#008CBA'; // Reset start button
+            });
+            return btn;
+        };
+        selectDestinationBtn.addTo(map);
+
+        // Map click to set Start and Destination points
+        map.on('click', function (e) {
+            if (currentSelection === 'start') {
+                if (startMarker) {
+                    startMarker.setLatLng(e.latlng);
+                } else {
+                    startMarker = L.marker(e.latlng, { icon: startIcon }).addTo(map);
+                }
+                currentSelection = ''
+                control.setWaypoints([e.latlng, control.getWaypoints()[1]]);
+            } else if (currentSelection === 'destination') {
+                if (destinationMarker) {
+                    destinationMarker.setLatLng(e.latlng);
+                } else {
+                    destinationMarker = L.marker(e.latlng, { icon: destIcon }).addTo(map);
+                }
+                currentSelection = ''
+                control.setWaypoints([control.getWaypoints()[0], e.latlng]);
+            }
+        });
+
+        // Tracking Button Control
+        var trackBtn = L.control({ position: 'topleft' });
+        var trackingID = null
+
+        trackBtn.onAdd = function () {
+            var btn = L.DomUtil.create('button', 'leaflet-control-button');
+            btn.innerHTML = '📍'; // Emoji for GPS tracking
+            btn.title = "Track My Location";
+            
+            L.DomEvent.on(btn, 'click', function (event) {
+                L.DomEvent.stopPropagation(event); // Prevent map click
+                
+                if (navigator.geolocation) {
+                    // If tracking is already active, stop it first
+                    if (trackingID !== null) {
+                        navigator.geolocation.clearWatch(trackingID);
+                        trackingID = null;
+                        btn.style.backgroundColor = '#333'; // Reset button color
+                        return;
+                    }
+
+                    // Start tracking user's location
+                    trackingID = navigator.geolocation.watchPosition(function (position) {
+                        var userLatLng = L.latLng(position.coords.latitude, position.coords.longitude);
+
+                        // Move the Start Marker
+                        if (startMarker) {
+                            startMarker.setLatLng(userLatLng);
+                        } else {
+                            startMarker = L.marker(userLatLng, {
+                                icon: startIcon // Your custom green icon
+                            }).addTo(map);
+                        }
+
+                        // Update Routing
+                        control.setWaypoints([userLatLng, control.getWaypoints()[1]]);
+                        
+                        map.setView(userLatLng, 16); // Optional: Center map on user
+                        btn.style.backgroundColor = '#4CAF50'; // Indicate tracking is active
+                    }, function (error) {
+                        alert("Error getting location: " + error.message);
+                    }, { enableHighAccuracy: true });
+                } else {
+                    alert("Geolocation is not supported by this browser.");
+                }
+            });
+
+            return btn;
+        };
+
+        trackBtn.addTo(map);
+
+        // Debugging location found event (Logs coordinates)
+        map.on('locationfound', function(e) {
+            console.log("User's Location:", e.latlng);
+        });
+    </script>
+</body>
+</html>
