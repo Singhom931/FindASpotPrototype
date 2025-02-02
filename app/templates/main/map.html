@@ -258,31 +258,77 @@
             var lonMin = lon - (radius / (111320 * Math.cos(lat * Math.PI / 180)));
             var lonMax = lon + (radius / (111320 * Math.cos(lat * Math.PI / 180)));
 
-            var parkingUrl = `http://overpass-api.de/api/interpreter?data=[out:json];node[amenity=parking](${latMin},${lonMin},${latMax},${lonMax});out;`; 
-
+            //var parkingUrl = `http://overpass-api.de/api/interpreter?data=[out:json];node[amenity=parking](${latMin},${lonMin},${latMax},${lonMax});out;`; 
+            var parkingUrl = `http://overpass-api.de/api/interpreter?data=[out:json][timeout:50];(node["amenity"="parking"](${latMin},${lonMin},${latMax},${lonMax});way["amenity"="parking"](${latMin},${lonMin},${latMax},${lonMax});relation["amenity"="parking"](${latMin},${lonMin},${latMax},${lonMax}););out body;>;out skel qt;`;
+            console.log(parkingUrl)
             fetch(parkingUrl)
-                .then(response => response.json())
-                .then(data => {
-                    var parkingList = document.getElementById('parking-list');
-                    parkingList.innerHTML = ""; // Clear previous list
-                    var nearbyParkings = [];
+            .then(response => response.json())
+            .then(data => {
+                var parkingList = document.getElementById('parking-list');
+                parkingList.innerHTML = ""; // Clear previous list
+                var nearbyParkings = [];
+                var nodeMap = {}; // Store node locations
+                var wayCentroids = new Set(); // Prevent duplicate centroids
+                var wayNodes = new Set(); 
 
-                    data.elements.forEach(parking => {
-                        var latLng = L.latLng(parking.lat, parking.lon);
-                        var distance = userLatLng.distanceTo(latLng);
+                // Store all nodes in a dictionary for easy lookup
+                data.elements.forEach(element => {
+                    if (element.type === "node") {
+                        nodeMap[element.id] = { lat: element.lat, lon: element.lon };
+                    }
+                });
 
-                        if (distance <= radius) {
+                data.elements.forEach(parking => {
+                    let latLng = null;
+                    let polygonCoords = [];
+
+                    if (parking.type === "way" && parking.nodes) {
+                        // If it's a way, compute the centroid and store polygon coordinates
+                        let latSum = 0, lonSum = 0, count = 0;
+
+                        parking.nodes.forEach(nodeId => {
+                            wayNodes.add(nodeId);
+                            if (nodeMap[nodeId]) {
+                                let node = nodeMap[nodeId];
+                                latSum += node.lat;
+                                lonSum += node.lon;
+                                count++;
+                                polygonCoords.push([node.lat, node.lon]); // Store for polygon
+                            }
+                        });
+
+                        if (count > 0) {
+                            let avgLat = latSum / count;
+                            let avgLon = lonSum / count;
+                            latLng = L.latLng(avgLat, avgLon);
+                            var distance = userLatLng.distanceTo(latLng);
                             nearbyParkings.push({
                                 latLng: latLng,
                                 distance: distance,
-                                id: parking.id
+                                id: parking.id,
+                                polygonCoords: polygonCoords.length > 2 ? polygonCoords : null // Only draw polygon if valid
                             });
                         }
-                    });
+                    }else if (parking.type === "node" && parking.lat && parking.lon) {
+                        if (!wayNodes.has(parking.id)) {
+                        // If it's a standalone node (not part of a way)
+                        latLng = L.latLng(parking.lat, parking.lon);
+                        var distance = userLatLng.distanceTo(latLng);
+                        nearbyParkings.push({
+                            latLng: latLng,
+                            distance: distance,
+                            id: parking.id,
+                        });
+                    }
+                }
+                });
 
-                    nearbyParkings.sort((a, b) => a.distance - b.distance);
+                nearbyParkings.sort((a, b) => a.distance - b.distance);
 
-                    nearbyParkings.forEach(parking => {
+                nearbyParkings.forEach(parking => {
+                    // Avoid duplicate centroid markers for ways
+                    if (!wayCentroids.has(parking.latLng.toString())) {
+                        wayCentroids.add(parking.latLng.toString());
                         var marker = L.marker(parking.latLng).addTo(map);
 
                         var parkingInfo = `<div class="parking-item">
@@ -296,9 +342,20 @@
                         marker.on('click', function () {
                             setDestination(parking.latLng.lat, parking.latLng.lng);
                         });
-                    });
-                })
-                .catch(err => console.error("Error fetching parking data:", err));
+                    }
+
+                    // Draw a tinted polygon if it's a way
+                    if (parking.polygonCoords) {
+                        L.polygon(parking.polygonCoords, {
+                            color: "blue",         // Outline color
+                            fillColor: "blue",     // Fill color
+                            fillOpacity: 0.3,      // Tinted effect
+                            weight: 1
+                        }).addTo(map);
+                    }
+                });
+            })
+            .catch(err => console.error("Error fetching parking data:", err));
         }
 
         // Function to set destination on map
