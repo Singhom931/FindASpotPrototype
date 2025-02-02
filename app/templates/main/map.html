@@ -248,9 +248,18 @@
         trackBtn.addTo(map);
 
         // Function to update the parking list with distance filter
-        function updateParkingList(userLatLng, radius) {
-            var parkingUrl = `http://overpass-api.de/api/interpreter?data=[out:json];node[amenity=parking](51.3,-0.5,51.7,-0.1);out;`; 
-            
+        function updateParkingList(userLatLng, radius) {      
+            var lat = userLatLng.lat;
+            var lon = userLatLng.lng;
+
+            // Calculate the bounding box based on the center point and radius
+            var latMin = lat - (radius / 111320); // Approximate conversion from meters to degrees
+            var latMax = lat + (radius / 111320);
+            var lonMin = lon - (radius / (111320 * Math.cos(lat * Math.PI / 180)));
+            var lonMax = lon + (radius / (111320 * Math.cos(lat * Math.PI / 180)));
+
+            var parkingUrl = `http://overpass-api.de/api/interpreter?data=[out:json];node[amenity=parking](${latMin},${lonMin},${latMax},${lonMax});out;`; 
+
             fetch(parkingUrl)
                 .then(response => response.json())
                 .then(data => {
@@ -327,6 +336,7 @@
             if (startMarker) {
                 var userLatLng = startMarker.getLatLng();
                 var radius = parseFloat(document.getElementById('radius').value);
+                console.log(userLatLng)
                 updateParkingList(userLatLng, radius);
             }
         });
