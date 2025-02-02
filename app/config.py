@@ -6,6 +6,7 @@ class Config:
 
     # Configure the app for SQLAlchemy
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI')
+    print(SQLALCHEMY_DATABASE_URI)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SESSION_TYPE = 'sqlalchemy'  
     SESSION_PERMANENT = False  # Make session data non-permanent

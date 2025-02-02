@@ -4,4 +4,5 @@ from . import main
 
 @main.route('/')
 def index():
-    return render_template('main/home.html')
+    return render_template('main/map.html')
+
